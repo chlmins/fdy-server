@@ -28,20 +28,19 @@ const Flower = mongoose.model('Flower', flowerSchema, 'flowers');
 app.get('/flowers', async (req, res) => {
   const flowername = req.query.flowername;
 
-  try { 
-    
-    const flower = await Flower.findOne({ 
-        $or: [
-            { flowername: flowername },
-            { flowername_kr: flowername }
-          ]
-        });
+  try {
+    const flower = await Flower.findOne({
+      $or: [
+        { flowername: flowername },
+        { flowername_kr: flowername }
+      ]
+    });
 
     if (!flower) {
       res.status(404).json({ error: 'Flower not found' });
     } else {
       const { flowername, habitat, binomialName, classification, flowername_kr } = flower;
-      res.json({ flowername, habitat, binomialName, classification, flowername_kr }); 
+      res.json({ flowername, habitat, binomialName, classification, flowername_kr });
     }
   } catch (error) {
     console.error('Error retrieving flower information:', error);
@@ -49,7 +48,20 @@ app.get('/flowers', async (req, res) => {
   }
 });
 
-app.get('/naver-shopping', async (req, res) => {
+// ✅ 새로 추가된 리다이렉트 API
+app.get('/naver-shopping', (req, res) => {
+  const keyword = req.query.flowername;
+  if (!keyword) {
+    return res.status(400).send('Missing flowername');
+  }
+
+  const encoded = encodeURIComponent(keyword);
+  const redirectUrl = `https://search.shopping.naver.com/search/all?query=${encoded}`;
+  res.redirect(redirectUrl);
+});
+
+// ✅ 기존 JSON 응답 API는 /naver-shopping-api 로 경로 변경 (선택사항)
+app.get('/naver-shopping-api', async (req, res) => {
   const flowername = req.query.flowername;
 
   if (!flowername) {
@@ -57,21 +69,20 @@ app.get('/naver-shopping', async (req, res) => {
     return;
   }
 
-  // Use environment variables for Naver API credentials
   const clientId = process.env.CLIENT_ID;
   const clientSecret = process.env.CLIENT_SECRET;
-  const displayPerPage = 100; 
-  const maxResults = 1000; 
+  const displayPerPage = 100;
+  const maxResults = 1000;
 
-  let start = 1; 
+  let start = 1;
 
   async function fetchNaverShoppingResults() {
     try {
       const allResults = [];
 
-      while (start <= maxResults) { 
+      while (start <= maxResults) {
         const apiUrl = `https://openapi.naver.com/v1/search/shop.json?query=${encodeURIComponent(flowername)}&display=${displayPerPage}&start=${start}&sort=sim`;
-      
+
         const response = await axios.get(apiUrl, {
           headers: {
             'X-Naver-Client-Id': clientId,
@@ -83,12 +94,10 @@ app.get('/naver-shopping', async (req, res) => {
         const items = data.items || [];
 
         if (items.length === 0) {
-          break; 
+          break;
         }
 
         allResults.push(...items);
-
-       
         start += displayPerPage;
 
         if (start > maxResults) {
@@ -100,22 +109,19 @@ app.get('/naver-shopping', async (req, res) => {
     } catch (error) {
       console.error('네이버 쇼핑 API 오류:', error);
       throw new Error('Naver Shopping API error');
-    } finally {
     }
   }
 
   try {
     const data = await fetchNaverShoppingResults();
     console.log(`총 ${data.length}개의 검색 결과를 가져왔습니다.`);
-    res.json({ items: data }); 
+    res.json({ items: data });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Naver Shopping API error' }); 
+    res.status(500).json({ error: 'Naver Shopping API error' });
   }
 });
-
 
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
-
